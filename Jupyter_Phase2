@@ -1,0 +1,135 @@
+==================
+# Phase 2: Data Preprocessing & EDA
+# =========================
+
+# Step 1: Import Libraries
+import os
+import pandas as pd
+import numpy as np
+import json
+import matplotlib.pyplot as plt
+import seaborn as sns-
+sns.set(style="whitegrid")
+
+# =========================
+# Step 2: Folder Setup
+# =========================
+base_folder = r"C:\Users\srima\Desktop\AI_Study_Assistant"
+datasets_folder = os.path.join(base_folder, "datasets")
+reports_folder = os.path.join(base_folder, "reports")
+
+# Create folders if they don't exist
+os.makedirs(datasets_folder, exist_ok=True)
+os.makedirs(reports_folder, exist_ok=True)
+
+# =========================
+# Step 3: Load Datasets
+# =========================
+
+## 3.1 CNN/DailyMail
+cnn_data = pd.read_csv(os.path.join(datasets_folder, "train.csv"))
+print("CNN Data shape:", cnn_data.shape)
+display(cnn_data.head())
+
+## 3.2 SQuAD JSON
+with open(os.path.join(datasets_folder, "train-v1.1.json")) as f:
+    squad_data = json.load(f)
+print("SQuAD keys:", squad_data.keys())
+
+# Preview first 5 Q&A from first article
+for article in squad_data['data'][:1]:
+    for paragraph in article['paragraphs']:
+        context = paragraph['context']
+        for qa in paragraph['qas'][:5]:
+            print("Q:", qa['question'])
+            print("A:", qa['answers'][0]['text'] if qa['answers'] else "No answer")
+
+## 3.3 Elementary MCQs
+elem_mcq = pd.read_csv(os.path.join(datasets_folder, "Elementary-DMC-Train.csv"))
+print("Elementary MCQ shape:", elem_mcq.shape)
+display(elem_mcq.head())
+
+# =========================
+# Step 4: Data Cleaning
+# =========================
+
+## 4.1 Check missing values
+print("CNN missing values:\n", cnn_data.isnull().sum())
+print("MCQ missing values:\n", elem_mcq.isnull().sum())
+
+## 4.2 Drop missing & duplicates
+cnn_data = cnn_data.dropna().drop_duplicates()
+elem_mcq = elem_mcq.dropna().drop_duplicates()
+
+## 4.3 Remove noise
+cnn_data = cnn_data[cnn_data['article'].str.len() > 50]
+elem_mcq = elem_mcq[elem_mcq['question'].str.len() > 5]
+
+# =========================
+# Step 5: Exploratory Data Analysis (EDA)
+# =========================
+
+## 5.1 CNN/DailyMail
+cnn_data['length'] = cnn_data['article'].str.len()
+sns.histplot(cnn_data['length'], bins=50)
+plt.title("Distribution of Article Lengths")
+plt.xlabel("Length (characters)")
+plt.show()
+
+cnn_data['word_count'] = cnn_data['article'].apply(lambda x: len(str(x).split()))
+cnn_data['char_count'] = cnn_data['article'].apply(len)
+print(cnn_data[['length', 'word_count', 'char_count']].describe())
+
+## 5.2 Elementary MCQs
+elem_mcq['question_length'] = elem_mcq['question'].apply(lambda x: len(str(x).split()))
+sns.histplot(elem_mcq['question_length'], bins=30)
+plt.title("Question Length Distribution")
+plt.xlabel("Number of words")
+plt.show()
+
+# Count options per question (assuming columns option1-4 exist)
+if all(col in elem_mcq.columns for col in ['option1','option2','option3','option4']):
+    elem_mcq['num_options'] = elem_mcq[['option1','option2','option3','option4']].notnull().sum(axis=1)
+    sns.countplot(x='num_options', data=elem_mcq)
+    plt.title("Number of Options per Question")
+    plt.show()
+else:
+    print("Option columns not found in MCQ dataset.")
+
+# =========================
+# Step 6: Feature Engineering
+# =========================
+
+## CNN/DailyMail
+cnn_data['sentence_count'] = cnn_data['article'].apply(lambda x: len(str(x).split('.')))
+cnn_data['word_count'] = cnn_data['article'].apply(lambda x: len(str(x).split()))
+cnn_data['char_count'] = cnn_data['article'].apply(len)
+
+## Elementary MCQs
+elem_mcq['question_word_count'] = elem_mcq['question'].apply(lambda x: len(str(x).split()))
+if 'num_options' not in elem_mcq.columns and all(col in elem_mcq.columns for col in ['option1','option2','option3','option4']):
+    elem_mcq['num_options'] = elem_mcq[['option1','option2','option3','option4']].notnull().sum(axis=1)
+
+# =========================
+# Step 7: Save Cleaned Datasets
+# =========================
+cnn_data.to_csv(os.path.join(datasets_folder, "train_cleaned.csv"), index=False)
+elem_mcq.to_csv(os.path.join(datasets_folder, "Elementary-DMC-Train_cleaned.csv"), index=False)
+
+# Save feature list
+features_list = """
+CNN/DailyMail features:
+- length
+- word_count
+- char_count
+- sentence_count
+
+Elementary MCQ features:
+- question_word_count
+- num_options
+"""
+
+with open(os.path.join(reports_folder, "features_list.txt"), "w") as f:
+    f.write(features_list)
+
+print("✅ Phase 2 complete! Cleaned datasets and feature list saved successfully.")
